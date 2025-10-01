@@ -1,0 +1,232 @@
+# ==============================================================================
+# Author: Julian Heidecke        
+# Email: julian.heidecke@iwr.uni-heidelberg.de or julian.heidecke@gmail.com
+# ==============================================================================
+
+library(tidyverse)
+library(multcompView)
+library(cowplot)
+library(grid)
+library(gridExtra)
+source(".../helper scripts/kendall_pairwise_permutation_test.R")
+
+#-------------------------------------------------------------------------------
+# Load monthly data already matched with covariates
+#-------------------------------------------------------------------------------
+
+# The covariate data is openly available from:
+# - Copernicus (https://cds.climate.copernicus.eu/datasets/derived-era5-land-daily-statistics?tab=overview)
+# - Eurostat (https://ec.europa.eu/eurostat/de/)
+# - CORINE (https://land.copernicus.eu/en/products/corine-land-cover)
+# Restrictions apply to the Human WNND data which is only available upon request
+# at TESSy (https://www.ecdc.europa.eu/en/publications-data/european-surveillance-system-tessy)
+df_wnnd <- 
+  read.csv("....csv")
+
+# only look at locations-years that have at least one case
+df_wnnd <- df_wnnd %>%
+  mutate(year = year(Date)) %>%
+  group_by(NUTS_ID, year) %>%
+  filter(any(wnnd_sum > 0)) %>%
+  ungroup() 
+
+colnames(df_wnnd)
+
+# Keep only relevant columns
+df_wnnd <- df_wnnd[,c(12:15,20:42)]
+
+# We will also apply the analysis on a filtered dataset with temps>15°C
+df_wnnd_upper_temps <- df_wnnd %>% 
+  filter(temp_3mo_avg>15)
+
+#-------------------------------------------------------------------------------
+# Calculate rank correlations
+#-------------------------------------------------------------------------------
+
+predictors <- names(df_wnnd)[c(1:26)]
+
+# this order is just for better overview when printing results
+order_results <- c("temp_3mo_avg", "r0_from_daily_3mo_avg",
+                   "r0_from_monthly_3mo_avg", "r0_from_seasonal_3mo_avg",
+                   "r0_from_daily_native_3mo_avg", "r0_from_monthly_native_3mo_avg",
+                   "r0_from_seasonal_native_3mo_avg",
+                   "temp_2mo_avg", "r0_from_daily_2mo_avg",
+                   "r0_from_monthly_2mo_avg", "r0_from_seasonal_2mo_avg",
+                   "r0_from_daily_native_2mo_avg", "r0_from_monthly_native_2mo_avg",
+                   "r0_from_seasonal_native_2mo_avg",
+                   "temp_4mo_avg", "r0_from_daily_4mo_avg",
+                   "r0_from_monthly_4mo_avg", "r0_from_seasonal_4mo_avg",
+                   "r0_from_daily_native_4mo_avg", "r0_from_monthly_native_4mo_avg",
+                   "r0_from_seasonal_native_4mo_avg",
+                   "temp", "r0_from_daily",
+                   "r0_from_monthly", 
+                   "r0_from_daily_native", "r0_from_monthly_native")
+
+# calculate kendall tau's on "full" dataset
+kendalls_tauB <- sapply(c(1:26), 
+                        function(x) cor.test(pull(df_wnnd, 27),
+                                             pull(df_wnnd, x),
+                                             method = "kendall")$estimate)
+
+names(kendalls_tauB) <- predictors
+kendalls_tauB[order_results]
+
+# calculate kendall tau's on restricted dataset
+kendalls_tauB_restricted <- sapply(c(1:26), 
+                                   function(x) cor.test(pull(df_wnnd_upper_temps, 27), 
+                                                        pull(df_wnnd_upper_temps, x),
+                                                        method = "kendall")$estimate)
+
+names(kendalls_tauB_restricted) <- predictors
+kendalls_tauB_restricted[order_results]
+
+#-------------------------------------------------------------------------------
+# Test significance of difference between rank correlations
+#-------------------------------------------------------------------------------
+
+# keep only 3-month moving average values of predictors
+df_wnnd <- df_wnnd[,c(2,6,10,14,19,22,24,27)]
+df_wnnd_upper_temps <- df_wnnd_upper_temps[,c(2,6,10,14,19,22,24,27)]
+predictors <- names(df_wnnd)[c(1:7)]
+
+# loop through the full and restricted dataset and store results in lists
+dfs <- list(df_wnnd, df_wnnd_upper_temps)
+res <- list()
+
+for(i in 1:2){
+  # apply pairwise permutation test
+  res[[i]] <- kendall_pairwise_permutation_test(
+    df = dfs[[i]],
+    target_col = 8,                    
+    predictor_cols = c(1:7),     
+    nsim = 10000,
+    two_sided = T,
+    seed = 123
+  )
+  
+  # add tau's and their p-values 
+  pred_df <- dfs[[i]][, c(1:7)]
+  res[[i]]$taus <- lapply(predictors, \(p) #\(p) is equivalent to function(p){}
+                          tibble(
+                            predictor = p,
+                            tau = cor.test(dfs[[i]][[8]], 
+                                           rank(pred_df[[p]]), 
+                                           method = "kendall")$estimate,
+                            p = cor.test(dfs[[i]][[8]], 
+                                         rank(pred_df[[p]]), 
+                                         method = "kendall")$p.value
+                          )) |> bind_rows()
+  
+  # build matrix of p-values of pairwise difference of tau's
+  p_mat <- matrix(1, nrow = length(predictors), ncol = length(predictors),
+                  dimnames = list(predictors, predictors))
+  for (j in seq_len(nrow(res[[i]]$comparisons))) {
+    row <- res[[i]]$comparisons$predictor1[j]
+    col <- res[[i]]$comparisons$predictor2[j]
+    p_val <- res[[i]]$comparisons$p_value[j]
+    p_mat[row, col] <- p_val
+    p_mat[col, row] <- p_val
+  }
+
+  # generate group letters based on statistically non-significant differences
+  group_letters <- multcompLetters(p_mat, threshold = 0.05)$Letters
+
+  res[[i]]$taus <- res[[i]]$taus %>%
+    mutate(group = group_letters[predictor]) %>%
+    arrange(-desc(tau))
+  
+  res[[i]]$taus$predictor <- factor(res[[i]]$taus$predictor,
+                                    levels = res[[i]]$taus$predictor)
+  
+}
+
+# some ordering for plotting
+predictor_order <- c(
+  "temp_3mo_avg",
+  "r0_from_daily_native_3mo_avg",
+  "r0_from_monthly_native_3mo_avg",
+  "r0_from_seasonal_native_3mo_avg",
+  "r0_from_daily_3mo_avg",
+  "r0_from_monthly_3mo_avg",
+  "r0_from_seasonal_3mo_avg"
+)
+
+# Convert predictor to factor with specified order
+res[[1]]$taus$predictor <- factor(res[[1]]$taus$predictor,
+                                  levels = predictor_order)
+res[[2]]$taus$predictor <- factor(res[[2]]$taus$predictor,
+                                  levels = predictor_order)
+
+# plot for results on "full" dataset
+plot1 <- ggplot(res[[1]]$taus, aes(x = predictor, y = tau)) + 
+  geom_col(fill = "#56B4E9", width = 0.7) + 
+  geom_text(aes(label = round(tau, 3)), vjust = -0.5, size = 4) +
+  geom_text(aes(label = group), vjust = -2, size = 4) +
+  labs(
+    title = "\"Full\" dataset"
+  ) +
+  scale_x_discrete(labels = c(
+    "temp_3mo_avg" = expression(paste("Temperature")),
+    "r0_from_daily_native_3mo_avg" = expression(R["0, grid"]^{"rel, d"}),
+    "r0_from_monthly_native_3mo_avg" = expression(R["0, grid"]^{"rel, m"}),
+    "r0_from_seasonal_native_3mo_avg" = expression(R["0, grid"]^{"rel, s"}),
+    "r0_from_daily_3mo_avg" = expression(R[0]^{"rel, d"}),
+    "r0_from_monthly_3mo_avg" = expression(R[0]^{"rel, m"}),
+    "r0_from_seasonal_3mo_avg" = expression(R[0]^{"rel, s"})
+  )) + 
+  scale_y_continuous(limits = c(0, 0.52), expand = c(0, 0)) + 
+  theme_bw(base_size = 14) +  
+  theme(
+    plot.title = element_text(size = 12),
+    axis.title = element_blank(),
+    panel.grid = element_blank()
+  ) 
+
+plot1
+
+# plot for results on "restricted" dataset
+plot2 <- ggplot(res[[2]]$taus, aes(x = predictor, y = tau)) + 
+  geom_col(fill = "#56B4E9", width = 0.7) + 
+  geom_text(aes(label = round(tau, 3)), vjust = -0.5, size = 4) +
+  geom_text(aes(label = group), vjust = -2, size = 4) +
+  labs(
+    title = "Limited to temperatures >15°C"
+  ) +
+  scale_x_discrete(labels = c(
+    "temp_3mo_avg" = expression(paste("Temperature")),
+    "r0_from_daily_native_3mo_avg" = expression(R["0, grid"]^{"rel, d"}),
+    "r0_from_monthly_native_3mo_avg" = expression(R["0, grid"]^{"rel, m"}),
+    "r0_from_seasonal_native_3mo_avg" = expression(R["0, grid"]^{"rel, s"}),
+    "r0_from_daily_3mo_avg" = expression(R[0]^{"rel, d"}),
+    "r0_from_monthly_3mo_avg" = expression(R[0]^{"rel, m"}),
+    "r0_from_seasonal_3mo_avg" = expression(R[0]^{"rel, s"})
+  )) + 
+  scale_y_continuous(limits = c(0, 0.47), expand = c(0, 0)) + 
+  theme_bw(base_size = 14) +  
+  theme(
+    plot.title = element_text(size = 12),
+    axis.title = element_blank(),
+    panel.grid = element_blank()
+  ) 
+
+plot2
+
+# Combine plots in grid
+plot_list = list(plot1,
+                 plot2)
+
+plot_grid = cowplot::plot_grid(plotlist = plot_list, ncol=1, label_size = 12,
+                                align = "h", axis = "b", labels = c('A', 'B'))
+
+y.grob <- textGrob(expression("Kendall's " * tau[B] * " with monthly WNND per 100K"), 
+                   gp=gpar(col="black", fontsize=12), rot=90)
+
+x.grob <- textGrob("3-month moving average", 
+                   gp=gpar(col="black", fontsize=12))
+
+grid.arrange(arrangeGrob(plot_grid, left = y.grob, bottom = x.grob))
+
+ggsave(".../kendalls_monthly.tiff", 
+       plot = grid.arrange(arrangeGrob(plot_grid, left = y.grob, bottom = x.grob)),
+       width = 8, height = 7, 
+       dpi = 600, units = "in", compression = "lzw")
