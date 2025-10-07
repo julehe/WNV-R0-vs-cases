@@ -248,7 +248,7 @@ df_wnnd_avg  <- df_wnnd  %>%
   group_by(NUTS_ID) %>%
   summarise(temp_summer=mean(temp_summer),
             wnnd_sum = sum(wnnd_sum),
-            r0_post_from_seasonal_summer = mean(r0_post_from_seasonal_summer),
+            r0_from_seasonal_summer = mean(r0_from_seasonal_summer),
             incidence_per_100K = mean(incidence_per_100K),
             population= round(mean(population)))
 
@@ -416,7 +416,7 @@ EU_NUTS0_full <- filter(EU_NUTS0_full, CNTR_CODE %in% EU_NUTS$CNTR_CODE)
 EU_NUTS0_full <- st_crop(EU_NUTS0_full, manual_bbox)
 
 R0_map<-ggplot() +
-  geom_sf(data = EU_NUTS, aes(fill = r0_post_from_seasonal_summer), color = NA) +
+  geom_sf(data = EU_NUTS, aes(fill = r0_from_seasonal_summer), color = NA) +
   geom_sf(data = EU_NUTS0_full, fill = NA, linewidth = 0.3) +
   geom_sf(data = EU_NUTS_highlight, fill = NA, color = "black", linewidth = 0.4) +
   scale_fill_gradientn(
@@ -449,7 +449,7 @@ R0_map<-ggplot() +
 
 R0_map
 
-ggsave(".../R0_map_new.tiff", 
+ggsave(".../R0_map.tiff", 
        plot = R0_map,
        width = 4, height = 5, 
        dpi = 600, units = "in", compression = "lzw")
@@ -695,7 +695,7 @@ for(year in 2010:2023){
   NUTS_cases_centroids <- st_centroid(NUTS_cases)
   
   map_temp <- ggplot() +
-    geom_sf(data = NUTS_temp, aes(fill = r0_post_from_seasonal_summer), color = NA) +
+    geom_sf(data = NUTS_temp, aes(fill = r0_from_seasonal_summer), color = NA) +
     geom_sf(data = EU_NUTS0_full, fill = NA, linewidth = 0.3) +
     geom_sf(data = NUTS_cases_centroids, color = "black", size = 1.5, shape = 21, fill = "yellow") +
     scale_fill_gradientn(
