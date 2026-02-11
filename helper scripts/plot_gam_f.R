@@ -6,31 +6,34 @@
 library(mgcv)
 library(tidyverse)
 library(ggplot2)
+library(MASS)
 
 #-------------------------------------------------------------------------------
 # Define GAM plotting function 
 #-------------------------------------------------------------------------------
 
-plot_gam_f <- function(df, model, predictor, r0_predictor = F, type = "monthly",
-                       binary = F, n_bins = 30){
+plot_gam_f <- function(df, model, predictor, adjustments = c(NA), 
+                       r0_predictor = F, type = "monthly", binary = F, 
+                       n_bins = 30){
   
   if(r0_predictor){
-    new_data <- data.frame(
-      seq(0,
-          #min(df[[predictor]], na.rm = TRUE),
-          max(df[[predictor]], na.rm = TRUE),
-          length.out = 1000)
-    )
+    lower_bound = 0
   }else{
-    new_data <- data.frame(
-      seq(10,
-          #min(df[[predictor]], na.rm = TRUE),
-          max(df[[predictor]], na.rm = TRUE),
-          length.out = 1000)
-    )
+    lower_bound = 10
   }
+  
+  new_data <- data.frame(
+    seq(lower_bound,
+        max(df[[predictor]], na.rm = TRUE),
+        length.out = 1000)
+  )
 
   names(new_data) <- predictor 
+  
+  if(all(!is.na(adjustments))){
+    new_data[adjustments] <- lapply(model$model[adjustments], median)
+  }
+  
   # predict with GAM on new data
   prediction <- predict(
     model, se.fit = TRUE, newdata = new_data,
@@ -47,8 +50,48 @@ plot_gam_f <- function(df, model, predictor, r0_predictor = F, type = "monthly",
   new_data$prediction_upper_95CI <- model$family$linkinv(new_data$prediction_upper_95CI)
   new_data$prediction_lower_95CI <- model$family$linkinv(new_data$prediction_lower_95CI)
   
-  #extract optimum predictor value
-  optimal_pred <- new_data[[predictor]][which.max(new_data$mean_prediction)]
+  if(r0_predictor){
+    optimal_pred <- NA
+    CI_optimal <- NA
+  }else{
+    set.seed(123)
+    #extract optimum predictor value of GAM mean
+    optimal_pred <- new_data[[predictor]][which.max(new_data$mean_prediction)]
+    
+    # generate 95% CI of optimum predictor value 
+    # (following https://webhomes.maths.ed.ac.uk/~swood34/mgcv/tampere/mgcv-advanced.pdf)
+    pd <- data.frame(
+        seq(10, 40, length = 1000)
+    )
+    names(pd) <- predictor 
+    
+    if(all(!is.na(adjustments))){
+      pd[adjustments] <- lapply(model$model[adjustments], median, na.rm = TRUE)
+    }
+    
+    Xp <- predict(model, pd, type = "lpmatrix")
+    
+    beta <- coef(model)
+    Vb <- vcov(model)
+    
+    n <- 5000
+    br <- mvrnorm(n, beta, Vb)
+    x_opt <- numeric(n)
+    
+    for (i in seq_len(n)) {
+      f_i <- Xp %*% br[i, ]
+      x_opt[i] <- pd[,1][which.max(f_i)]
+    }
+    
+    # sanity check 
+    if(any(x_opt == 40)){
+      print(paste(sum(x_opt == 40), "Samples of temperature optimum > 40°C"))
+    }
+    
+    CI_optimal <- quantile(x_opt, c(0.025, 0.5, 0.975))
+    CI_optimal["mean"] <- mean(x_opt)
+  }
+  
   
   if(binary == T){
     y <- "wnnd_pa"
@@ -128,7 +171,7 @@ plot_gam_f <- function(df, model, predictor, r0_predictor = F, type = "monthly",
     theme(
       legend.title = element_blank(),
       legend.position = "inside",
-      legend.position.inside = c(0.25, 0.75),
+      legend.position.inside = c(0.3, 0.75),
       panel.grid = element_blank()
     )
   
@@ -151,10 +194,12 @@ plot_gam_f <- function(df, model, predictor, r0_predictor = F, type = "monthly",
       geom_segment(data = data.frame(x = 24.4, label = "R0 Optimum"),  
                    aes(x = x, xend = x, y = 0, yend = Inf, color = label),  
                    linewidth = 0.7, 
-                   linetype = "dashed") +  
-      scale_color_manual(
-        values = c("1Data" = "black","2GAM Model" = "red", "R0 Optimum" = "#56B4E9"),  
-        labels = c("Data" ,"GAM fit", expression(R[0]^{"rel"} * " optimum"))
+                   linetype = "dashed") +
+          scale_color_manual(
+            values = c("1Data" = "black","2GAM Model" = "red", 
+                       "R0 Optimum" = "#56B4E9"),  
+            labels = c("Data mean" ,"GAM fit", 
+                       "GAM Optimum", expression(R[0]^{"rel"} * " optimum"))
       )
   }else{
     plot_gam <- plot_gam +
@@ -171,8 +216,10 @@ plot_gam_f <- function(df, model, predictor, r0_predictor = F, type = "monthly",
                    linewidth = 0.7, 
                    linetype = "dashed") +  
       scale_color_manual(
-        values = c("1Data" = "black","2GAM Model" = "red", "R0 Optimum" = "#56B4E9"),  
-        labels = c("Data mean ± SE" ,"GAM fit", expression(R[0]^{"rel"} * " optimum"))
+        values = c("1Data" = "black","2GAM Model" = "red", 
+                   "R0 Optimum" = "#56B4E9"),  
+        labels = c("Data mean ± SE" ,"GAM fit", 
+                   "GAM Optimum", expression(R[0]^{"rel"} * " optimum"))
       )
   }
   if(binary == T){
@@ -181,7 +228,7 @@ plot_gam_f <- function(df, model, predictor, r0_predictor = F, type = "monthly",
     plot_data <- ggplot() +
       geom_point(
         data = df,
-        aes(x = .data[[predictor]], y = .data[[y]], color='Data'),
+        aes(x = .data[[predictor]], y = .data[[y]]),
         shape = 19,
         size = 1,
         alpha = 0.2
@@ -189,19 +236,34 @@ plot_gam_f <- function(df, model, predictor, r0_predictor = F, type = "monthly",
       labs(  
         y = y_label
       ) +
-      scale_color_manual(
-        values = c("Data" = "black"),  
-        labels = c("Data")
-      ) + 
       theme_bw(base_size=12)+
       theme(
         legend.title = element_blank(),
         legend.position = "inside",
-        legend.position.inside = c(0.2, 0.75),
+        legend.position.inside = c(0.25, 0.75),
         panel.grid = element_blank()
       ) 
+    
+    if(r0_predictor == F){
+      plot_data <- plot_data +  
+        geom_rect(data = data.frame(xmin = 23.0, xmax = 25.8, ymin = 0, ymax = Inf, 
+                                    label = "R0 Optimum"),  
+                  aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, 
+                      color = label),  
+                  fill = "#56B4E9",
+                  alpha = 0.3,
+                  linetype = 0) +  
+        geom_segment(data = data.frame(x = 24.4, label = "R0 Optimum"),  
+                     aes(x = x, xend = x, y = 0, yend = Inf, color = label),  
+                     linewidth = 0.7, 
+                     linetype = "dashed") +
+        scale_color_manual(
+          values = c("R0 Optimum" = "#56B4E9"),  
+          labels = c(expression(R[0]^{"rel"} * " optimum"))
+        ) 
+    }
   }
   
   return(list(model_plot = plot_gam, data_plot = plot_data, 
-              optimum= optimal_pred))
+              optimum = optimal_pred, CI_optimum = CI_optimal))
 }
