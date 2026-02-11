@@ -8,36 +8,36 @@ library(multcompView)
 library(cowplot)
 library(grid)
 library(gridExtra)
-source(".../helper scripts/kendall_pairwise_permutation_test.R")
+source("code/helper scripts/kendall_pairwise_permutation_test.R")
 
 #-------------------------------------------------------------------------------
 # Load monthly data already matched with covariates
 #-------------------------------------------------------------------------------
 
-# The covariate data is openly available from:
-# - Copernicus (https://cds.climate.copernicus.eu/datasets/derived-era5-land-daily-statistics?tab=overview)
-# - Eurostat (https://ec.europa.eu/eurostat/de/)
-# - CORINE (https://land.copernicus.eu/en/products/corine-land-cover)
-# Restrictions apply to the Human WNND data which is only available upon request
-# at TESSy (https://www.ecdc.europa.eu/en/publications-data/european-surveillance-system-tessy)
 df_wnnd <- 
-  read.csv("....csv")
+  read.csv("data/WNND_data_with_covariates.csv")
 
 # only look at locations-years that have at least one case
 df_wnnd <- df_wnnd %>%
   mutate(year = year(Date)) %>%
   group_by(NUTS_ID, year) %>%
   filter(any(wnnd_sum > 0)) %>%
-  ungroup() 
+  ungroup()
 
 colnames(df_wnnd)
 
 # Keep only relevant columns
-df_wnnd <- df_wnnd[,c(12:15,20:42)]
+df_wnnd <- df_wnnd[,c(which(grepl("pop_weight", colnames(df_wnnd)) & 
+                              (
+                                grepl("r0", colnames(df_wnnd)) |
+                                  grepl("temp", colnames(df_wnnd))
+                              )
+                            ),
+                      ncol(df_wnnd))]
 
 # We will also apply the analysis on a filtered dataset with temps>15°C
 df_wnnd_upper_temps <- df_wnnd %>% 
-  filter(temp_3mo_avg>15)
+  filter(temp_3mo_avg_pop_weight>15)
 
 #-------------------------------------------------------------------------------
 # Calculate rank correlations
@@ -46,21 +46,21 @@ df_wnnd_upper_temps <- df_wnnd %>%
 predictors <- names(df_wnnd)[c(1:26)]
 
 # this order is just for better overview when printing results
-order_results <- c("temp_3mo_avg", "r0_from_daily_3mo_avg",
-                   "r0_from_monthly_3mo_avg", "r0_from_seasonal_3mo_avg",
-                   "r0_from_daily_native_3mo_avg", "r0_from_monthly_native_3mo_avg",
-                   "r0_from_seasonal_native_3mo_avg",
-                   "temp_2mo_avg", "r0_from_daily_2mo_avg",
-                   "r0_from_monthly_2mo_avg", "r0_from_seasonal_2mo_avg",
-                   "r0_from_daily_native_2mo_avg", "r0_from_monthly_native_2mo_avg",
-                   "r0_from_seasonal_native_2mo_avg",
-                   "temp_4mo_avg", "r0_from_daily_4mo_avg",
-                   "r0_from_monthly_4mo_avg", "r0_from_seasonal_4mo_avg",
-                   "r0_from_daily_native_4mo_avg", "r0_from_monthly_native_4mo_avg",
-                   "r0_from_seasonal_native_4mo_avg",
-                   "temp", "r0_from_daily",
-                   "r0_from_monthly", 
-                   "r0_from_daily_native", "r0_from_monthly_native")
+order_results <- c("temp_3mo_avg_pop_weight", "r0_from_daily_3mo_avg_pop_weight",
+                   "r0_from_monthly_3mo_avg_pop_weight", "r0_from_seasonal_3mo_avg_pop_weight",
+                   "r0_from_daily_native_3mo_avg_pop_weight", "r0_from_monthly_native_3mo_avg_pop_weight",
+                   "r0_from_seasonal_native_3mo_avg_pop_weight",
+                   "temp_2mo_avg_pop_weight", "r0_from_daily_2mo_avg_pop_weight",
+                   "r0_from_monthly_2mo_avg_pop_weight", "r0_from_seasonal_2mo_avg_pop_weight",
+                   "r0_from_daily_native_2mo_avg_pop_weight", "r0_from_monthly_native_2mo_avg_pop_weight",
+                   "r0_from_seasonal_native_2mo_avg_pop_weight",
+                   "temp_4mo_avg_pop_weight", "r0_from_daily_4mo_avg_pop_weight",
+                   "r0_from_monthly_4mo_avg_pop_weight", "r0_from_seasonal_4mo_avg_pop_weight",
+                   "r0_from_daily_native_4mo_avg_pop_weight", "r0_from_monthly_native_4mo_avg_pop_weight",
+                   "r0_from_seasonal_native_4mo_avg_pop_weight",
+                   "temp_pop_weight", "r0_from_daily_pop_weight",
+                   "r0_from_monthly_pop_weight", 
+                   "r0_from_daily_native_pop_weight", "r0_from_monthly_native_pop_weight")
 
 # calculate kendall tau's on "full" dataset
 kendalls_tauB <- sapply(c(1:26), 
@@ -85,8 +85,16 @@ kendalls_tauB_restricted[order_results]
 #-------------------------------------------------------------------------------
 
 # keep only 3-month moving average values of predictors
-df_wnnd <- df_wnnd[,c(2,6,10,14,19,22,24,27)]
-df_wnnd_upper_temps <- df_wnnd_upper_temps[,c(2,6,10,14,19,22,24,27)]
+df_wnnd <- df_wnnd[,c(
+  which(grepl("3mo", colnames(df_wnnd))), 
+                      27)
+  ]
+
+df_wnnd_upper_temps <- df_wnnd_upper_temps[,c(
+  which(grepl("3mo", colnames(df_wnnd_upper_temps))), 
+  27)
+]
+
 predictors <- names(df_wnnd)[c(1:7)]
 
 # loop through the full and restricted dataset and store results in lists
@@ -142,13 +150,13 @@ for(i in 1:2){
 
 # some ordering for plotting
 predictor_order <- c(
-  "temp_3mo_avg",
-  "r0_from_daily_native_3mo_avg",
-  "r0_from_monthly_native_3mo_avg",
-  "r0_from_seasonal_native_3mo_avg",
-  "r0_from_daily_3mo_avg",
-  "r0_from_monthly_3mo_avg",
-  "r0_from_seasonal_3mo_avg"
+  "temp_3mo_avg_pop_weight",
+  "r0_from_daily_native_3mo_avg_pop_weight",
+  "r0_from_monthly_native_3mo_avg_pop_weight",
+  "r0_from_seasonal_native_3mo_avg_pop_weight",
+  "r0_from_daily_3mo_avg_pop_weight",
+  "r0_from_monthly_3mo_avg_pop_weight",
+  "r0_from_seasonal_3mo_avg_pop_weight"
 )
 
 # Convert predictor to factor with specified order
@@ -166,13 +174,13 @@ plot1 <- ggplot(res[[1]]$taus, aes(x = predictor, y = tau)) +
     title = "\"Full\" dataset"
   ) +
   scale_x_discrete(labels = c(
-    "temp_3mo_avg" = expression(paste("Temperature")),
-    "r0_from_daily_native_3mo_avg" = expression(R["0, grid"]^{"rel, d"}),
-    "r0_from_monthly_native_3mo_avg" = expression(R["0, grid"]^{"rel, m"}),
-    "r0_from_seasonal_native_3mo_avg" = expression(R["0, grid"]^{"rel, s"}),
-    "r0_from_daily_3mo_avg" = expression(R[0]^{"rel, d"}),
-    "r0_from_monthly_3mo_avg" = expression(R[0]^{"rel, m"}),
-    "r0_from_seasonal_3mo_avg" = expression(R[0]^{"rel, s"})
+    "temp_3mo_avg_pop_weight" = expression(paste("Temperature")),
+    "r0_from_daily_native_3mo_avg_pop_weight" = expression(R["0, grid"]^{"rel, d"}),
+    "r0_from_monthly_native_3mo_avg_pop_weight" = expression(R["0, grid"]^{"rel, m"}),
+    "r0_from_seasonal_native_3mo_avg_pop_weight" = expression(R["0, grid"]^{"rel, s"}),
+    "r0_from_daily_3mo_avg_pop_weight" = expression(R[0]^{"rel, d"}),
+    "r0_from_monthly_3mo_avg_pop_weight" = expression(R[0]^{"rel, m"}),
+    "r0_from_seasonal_3mo_avg_pop_weight" = expression(R[0]^{"rel, s"})
   )) + 
   scale_y_continuous(limits = c(0, 0.52), expand = c(0, 0)) + 
   theme_bw(base_size = 14) +  
@@ -226,7 +234,4 @@ x.grob <- textGrob("3-month moving average",
 
 grid.arrange(arrangeGrob(plot_grid, left = y.grob, bottom = x.grob))
 
-ggsave(".../kendalls_monthly.tiff", 
-       plot = grid.arrange(arrangeGrob(plot_grid, left = y.grob, bottom = x.grob)),
-       width = 8, height = 7, 
-       dpi = 600, units = "in", compression = "lzw")
+# --> Results are in Table 1
