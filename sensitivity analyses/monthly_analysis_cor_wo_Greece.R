@@ -28,85 +28,6 @@ df_wnnd <- df_wnnd %>%
 df_wnnd <- df_wnnd %>%
   filter(!grepl("^EL", NUTS_ID))
 
-# ppcor::pcor.test(df_wnnd$temp_3mo_avg_pop_weight, df_wnnd$incidence_per_100K, 
-#                  df_wnnd$perm_irrigated, method = "kendall")
-# 
-# ppcor::pcor.test(df_wnnd$r0_from_seasonal_3mo_avg_pop_weight, df_wnnd$incidence_per_100K, 
-#                  df_wnnd$perm_irrigated, method = "kendall")
-
-# df_wnnd <- df_wnnd %>%
-#   mutate(year = year(Date)) %>%
-#   group_by(NUTS_ID) %>%
-#   filter(any(wnnd_sum > 0)) %>%
-#   ungroup()
-# 
-# 
-# df_wnnd <- df_wnnd %>%
-#   mutate(year = year(Date)) %>%
-#   group_by(NUTS_ID) %>%
-#   filter(any(wnnd_sum > 0)) %>%
-#   mutate(first_year = min(year[wnnd_sum > 0], na.rm = TRUE)) %>%
-#   filter(year >= first_year) %>%
-#   ungroup()
-
-# df_wnnd <- filter(df_wnnd, temp_3mo_avg>15)
-
-# seasonal
-# df_wnnd <- df_wnnd %>%
-#   #filter(temp_3mo_avg>15) %>%
-#   dplyr::select(NUTS_ID, Date, incidence_per_100K, wnnd_sum, temp_3mo_avg,
-#                 r0_from_seasonal_3mo_avg, r0_from_daily_native_3mo_avg) %>%
-#   mutate(year = year(Date)) %>%
-#   group_by(NUTS_ID, year) %>%
-#   filter(any(wnnd_sum > 0)) %>%
-#   mutate(incidence_per_100K = incidence_per_100K-mean(incidence_per_100K),
-#          temp_3mo_avg = temp_3mo_avg-mean(temp_3mo_avg),
-#          r0_from_daily_native_3mo_avg = r0_from_daily_native_3mo_avg-mean(r0_from_daily_native_3mo_avg),
-#          r0_from_seasonal_3mo_avg = r0_from_seasonal_3mo_avg-mean(r0_from_seasonal_3mo_avg)) %>%
-#   ungroup() 
-  
-
-# spatial
-# df_wnnd_x <- df_wnnd %>%
-#   mutate(year = year(Date),
-#          month = month(Date)) %>%
-#   group_by(NUTS_ID, year) %>%
-#   summarise(incidence_per_100K = sum(wnnd_sum)/mean(population),
-#          temp_3mo_avg = mean(temp_3mo_avg[month %in% 7:9], na.rm=T),
-#          r0_from_seasonal_native_3mo_avg = mean(r0_from_seasonal_native_3mo_avg[month %in% 7:9], na.rm=T),
-#          r0_from_seasonal_3mo_avg = mean(r0_from_seasonal_3mo_avg[month %in% 7:9], na.rm=T),
-#          .groups = "drop") %>%
-#   group_by(NUTS_ID) %>%
-#   summarise(incidence_per_100K = mean(incidence_per_100K),
-#             temp_3mo_avg = mean(temp_3mo_avg),
-#             r0_from_seasonal_native_3mo_avg = mean(r0_from_seasonal_native_3mo_avg),
-#             r0_from_seasonal_3mo_avg = mean(r0_from_seasonal_3mo_avg),
-#             .groups = "drop") %>%
-#   mutate(incidence_per_100K = incidence_per_100K-mean(incidence_per_100K, na.rm = T),
-#          temp_3mo_avg = temp_3mo_avg-mean(temp_3mo_avg, na.rm = T),
-#          r0_from_seasonal_native_3mo_avg = r0_from_seasonal_native_3mo_avg-mean(r0_from_seasonal_native_3mo_avg, na.rm = T),
-#          r0_from_seasonal_3mo_avg = r0_from_seasonal_3mo_avg-mean(r0_from_seasonal_3mo_avg, na.rm = T))
-
-# yearly --> weird looks like when looking at spatial and interannual signal 
-# together there is higher rank correlation with R0 but not or extremely marginal when separate...?
-# what happens if I leave spatial signal in the seasonal? this is weird...
-# df_wnnd_x <- df_wnnd %>%
-#   mutate(year = year(Date),
-#          month = month(Date)) %>%
-#   group_by(NUTS_ID, year) %>%
-#   summarise(incidence_per_100K = sum(wnnd_sum)/mean(population),
-#             temp_3mo_avg = mean(temp_3mo_avg[month %in% 7:9], na.rm=T),
-#             r0_from_seasonal_native_3mo_avg = mean(r0_from_seasonal_native_3mo_avg[month %in% 7:9], na.rm=T),
-#             r0_from_seasonal_3mo_avg = mean(r0_from_seasonal_3mo_avg[month %in% 7:9], na.rm=T),
-#             .groups = "drop") %>%
-#   group_by(NUTS_ID) %>%
-#   filter(any(incidence_per_100K>0)) %>%
-#   mutate(incidence_per_100K = incidence_per_100K-mean(incidence_per_100K),
-#          temp_3mo_avg = temp_3mo_avg-mean(temp_3mo_avg),
-#          r0_from_seasonal_native_3mo_avg = r0_from_seasonal_native_3mo_avg-mean(r0_from_seasonal_native_3mo_avg),
-#          r0_from_seasonal_3mo_avg = r0_from_seasonal_3mo_avg-mean(r0_from_seasonal_3mo_avg)) %>%
-#   ungroup()
-
 colnames(df_wnnd)
 
 # Keep only relevant columns
@@ -317,11 +238,4 @@ x.grob <- textGrob("3-month moving average",
 
 grid.arrange(arrangeGrob(plot_grid, left = y.grob, bottom = x.grob))
 
-ggsave("figures/monthly/kendalls_monthly.tiff", 
-       plot = grid.arrange(arrangeGrob(plot_grid, left = y.grob, bottom = x.grob)),
-       width = 8, height = 7, 
-       dpi = 300, units = "in", compression = "lzw")
-ggsave("figures/monthly/kendalls_monthly.svg", 
-       plot = grid.arrange(arrangeGrob(plot_grid, left = y.grob, bottom = x.grob)),
-       width = 8, height = 7, 
-       units = "in")
+# --> Results are in Table S5

@@ -1,6 +1,10 @@
 # ==============================================================================
 # Author: Julian Heidecke        
 # Email: julian.heidecke@iwr.uni-heidelberg.de or julian.heidecke@gmail.com
+#
+# Description: This provides a helper function for running fitting the GAMs and
+# retrieving results
+#
 # ==============================================================================
 
 library(mgcv)
@@ -11,12 +15,21 @@ library(tidyverse)
 #-------------------------------------------------------------------------------
 
 gam_analysis <- function(df, predictor, adjustments = c(NA), 
-                         binary = F, k = 20){
+                         binary = F, k_shared = 20, k_country = 5,
+                         country_effects = T){
   if(any(is.na(adjustments))){
     formula_adjustment <- ""
     print("No adjustments used")
   }else{
     formula_adjustment <- paste0("+",paste0(adjustments, collapse = "+")) 
+  }
+  
+  if(country_effects == T){
+    formula_country <- paste0("+ s(country,", 
+                              predictor, 
+                              ", bs='sz', k=k_country, xt = list(bs='cr'))")
+  }else{
+    formula_country <- ""
   }
     
   if(binary == T){
@@ -24,7 +37,8 @@ gam_analysis <- function(df, predictor, adjustments = c(NA),
       paste(
         "wnnd_pa ~ s(",
         predictor,
-        ", bs='cr', k=k)",
+        ", bs='cr', k=k_shared)",
+        formula_country,
         formula_adjustment,
         sep=""
       )
@@ -41,7 +55,8 @@ gam_analysis <- function(df, predictor, adjustments = c(NA),
       paste(
         "wnnd_sum ~ s(",
         predictor,
-        ", bs='cr', k=k)",
+        ", bs='cr', k=k_shared)",
+        formula_country,
         formula_adjustment,
         sep=""
       )
@@ -56,17 +71,16 @@ gam_analysis <- function(df, predictor, adjustments = c(NA),
   }
   
   print(AIC(model))
-  model_selected <- model
   
   # some model checks
   par(mfrow = c(2, 2))
-  gam.check(model_selected, rep=500)
-  print(k.check(model_selected))
-  print(summary(model_selected))
-  plot(model_selected)
-  print(model_selected$outer.info)
-  print(sum(influence(model_selected)))
+  gam.check(model, rep=500)
+  print(k.check(model))
+  print(summary(model))
+  plot(model)
+  print(model$outer.info)
+  print(sum(influence(model)))
   
-  return(list(model = model_selected,
-              summary = summary(model_selected)))
+  return(list(model = model,
+              summary = summary(model)))
 }

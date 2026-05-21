@@ -46,7 +46,7 @@ kendall_pairwise_permutation_test <- function(df,
       d_obs <- tau_C - tau_B
       
       res <- numeric(nsim)
-      for (i in 1:nsim) {
+      for (k in 1:nsim) {
         mask <- sample.int(2, n, replace = TRUE) == 1L
         permuted_ranksB <- ifelse(mask, B_rank, C_rank)
         permuted_ranksC <- ifelse(mask, C_rank, B_rank)
@@ -54,9 +54,9 @@ kendall_pairwise_permutation_test <- function(df,
         tau_permB <- cor.fk(A, permuted_ranksB)
         tau_permC <- cor.fk(A, permuted_ranksC)
         
-        res[i] <- tau_permC - tau_permB
+        res[k] <- tau_permC - tau_permB
         
-        print(i)
+        print(k)
       }
       
       p_val <- if (two_sided) {
@@ -65,7 +65,7 @@ kendall_pairwise_permutation_test <- function(df,
         mean(res >= d_obs)
       }
       
-      comparison_results[[paste(p1, p2, sep = "_vs_")]] <<- tibble(
+      comparison_results[[paste(p1, p2, sep = "_vs_")]] <<- tibble( # use global assignment since we are here in the anonymous function passed to walk()
         predictor1 = p1,
         predictor2 = p2,
         tau_B = tau_B,

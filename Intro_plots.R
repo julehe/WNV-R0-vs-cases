@@ -51,7 +51,23 @@ df_wnnd_filtered <- df_wnnd %>%
                       filter(month %in% 7:9)
 
 mean(df_wnnd_filtered$temp_3mo_avg_pop_weight, na.rm=T)
-sum(df_wnnd_filtered$temp_3mo_avg_pop_weight>24.4, na.rm = T)/sum(!is.na(df_wnnd_filtered$temp_3mo_avg_pop_weight))
+min(df_wnnd_filtered$temp_3mo_avg_pop_weight, na.rm=T)
+max(df_wnnd_filtered$temp_3mo_avg_pop_weight, na.rm=T)
+
+df_wnnd_filtered$country <- substr(df_wnnd_filtered$NUTS_ID, 1, 2)
+df_wnnd_filtered_summary <- df_wnnd_filtered %>%
+  group_by(country) %>%
+  summarize(mean = mean(temp_3mo_avg_pop_weight, na.rm =T),
+            min = min(temp_3mo_avg_pop_weight, na.rm =T),
+            max = max(temp_3mo_avg_pop_weight, na.rm =T)
+            ) %>%
+  ungroup()
+
+df_wnnd_filtered_summary[which.min(df_wnnd_filtered_summary$mean),]
+df_wnnd_filtered_summary[which.max(df_wnnd_filtered_summary$mean),]
+
+sum(df_wnnd_filtered$temp_3mo_avg_pop_weight>24.4, na.rm = T)/
+  sum(!is.na(df_wnnd_filtered$temp_3mo_avg_pop_weight))
 
 #-------------------------------------------------------------------------------
 # Plot case counts by month and country
@@ -96,10 +112,11 @@ plot_cases_month_country <- ggplot(df_summary, aes(x = month, fill = country)) +
   scale_fill_brewer(palette = "Set3", 
                     labels = new_labels,
                     guide = guide_legend(nrow=2)) +  
-  theme_bw(base_size = 9) + 
+  theme_bw(base_size = 7) + 
   theme(panel.grid = element_blank(),
         legend.position = "bottom",  
         legend.direction = "horizontal",
+        legend.key.size = unit(1,"line"),
         axis.title.x = element_blank(),
         axis.title.y = element_blank()
   )
@@ -117,14 +134,14 @@ df_cases_per_year <- df_wnnd %>%
 plot_cases_per_year <- ggplot(df_cases_per_year, aes(x = as.numeric(year), y = wnnd_sum)) +
   geom_col(fill = "steelblue") +
   geom_smooth(method = "lm", se = FALSE, color = "black", 
-              linewidth = 0.8) +
+              linewidth = 0.6) +
   scale_x_continuous(breaks = as.numeric(df_cases_per_year$year)) +
   labs(
     title = "Total WNND cases per year",
     x = "Year",
     y = "Number of cases"
   ) +
-  theme_bw(base_size = 9) +
+  theme_bw(base_size = 7) +
   theme(
     panel.grid = element_blank(),
     axis.text.x = element_text(angle = 45, hjust = 1),
@@ -216,11 +233,12 @@ plot_nbr_years_map <- ggplot(EU_NUTS) +
     title = "Number of years with WNND cases",
     fill=""
   ) + 
-  theme_bw(base_size = 9) +
+  theme_bw(base_size = 7) +
   theme(
     panel.grid = element_blank(),
     legend.position = "bottom",  
     legend.direction = "horizontal",
+    legend.key.size = unit(1,"line"),
     legend.box.margin = margin(t = 10, r = 0, b = 0, l = 0), # 0 is default
     plot.margin = margin(t = 6, r = 6, b = 6, l = 20), # 6 is default
     axis.text.x = element_blank(),
@@ -275,14 +293,14 @@ plot_total_cases <- ggplot() +
     colours = c("#74add1", "#ffffbf", "#f46d43", "#a50026"),
     na.value = "white",
     name = "",
-    guide = guide_colorbar(barwidth = 10, barheight = 0.5),
+    guide = guide_colorbar(barwidth = 8, barheight = 0.4),
     transform = "log2"
   ) +
   labs(
     title = expression("Total cases of WNND per region (" * log[2]*"-scale)"),
     fill=""
   ) + 
-  theme_bw(base_size = 9) +
+  theme_bw(base_size = 7) +
   theme(
     panel.grid = element_blank(),
     legend.position = "bottom",
@@ -302,20 +320,21 @@ plot_total_cases
 plot_list = list(plot_cases_month_country, plot_nbr_years_map,
                  plot_cases_per_year, plot_total_cases)
 
-plot_grid = cowplot::plot_grid(plotlist = plot_list, ncol=2, label_size = 12,
+plot_grid = cowplot::plot_grid(plotlist = plot_list, ncol = 2, label_size = 10,
                                align = "h", axis = "b", labels = c('A', 'B',
                                                                    'C','D')) 
 
 plot_grid
 
-ggsave("Figures/intro_plots/Figure_1.tiff", 
+
+ggsave("Figures/intro_plots/Figure_2.tiff", 
        plot = plot_grid,
-       width = 7.3, height = 7, 
+       width = 6.3, height = 6.04,
        bg = "white",
        dpi = 300, units = "in", compression = "lzw")
-ggsave("Figures/intro_plots/Figure_1.svg", 
+ggsave("Figures/intro_plots/Figure_2.svg", 
        plot = plot_grid,
-       width = 7.3, height = 7, 
+       width = 6.3, height = 6.04,
        bg = "white",
        units = "in")
 
